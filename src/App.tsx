@@ -17,9 +17,7 @@ function App() {
               No account required. Files are available for 7 days and 100 downloads.
             </p>
           </div>
-          
           <Uploader />
-
         </div>
       </main>
     </div>
