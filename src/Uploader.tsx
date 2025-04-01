@@ -1,3 +1,9 @@
+/**
+ * Uploader component
+ * Provides the main file upload functionality for the application
+ * Allows users to select files via drag-and-drop or file browser
+ * Displays upload progress and opens share dialog upon completion
+ */
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,14 +17,23 @@ import { Upload } from "lucide-react"
 import { ShareDialog } from "./ShareDialog"
 import { Progress } from "./components/ui/progress"
 
+// Type definition for tracking the upload state
 type UploadState = "idle" | "uploading" | "complete"
 
 export function Uploader() {
+  // State to store the selected files
   const [files, setFiles] = useState<FileList | null>(null)
+  // State to track the current upload status
   const [uploadState, setUploadState] = useState<UploadState>("idle")
+  // State to track upload progress percentage
   const [uploadProgress, setUploadProgress] = useState(0)
+  // State to control the visibility of the share dialog
   const [showShareDialog, setShowShareDialog] = useState(false)
 
+  /**
+   * Handles file selection from the file input
+   * Triggers the upload simulation when files are selected
+   */
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = event.target.files
     if (selectedFiles && selectedFiles.length > 0) {
@@ -27,6 +42,11 @@ export function Uploader() {
     }
   }
 
+  /**
+   * Simulates the file upload process
+   * Incrementally updates progress and shows share dialog when complete
+   * Note: This is a mock implementation; real implementation would use API calls
+   */
   const simulateUpload = () => {
     setUploadState("uploading")
     setUploadProgress(0)
@@ -52,9 +72,11 @@ export function Uploader() {
           <CardDescription>Secure, fast, and free file sharing</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Upload area with drag-and-drop functionality */}
           <div className="border-2 border-dashed border-primary/25 rounded-lg bg-secondary/50 transition-colors hover:border-primary/50">
             <div className="flex flex-col items-center justify-center py-16 px-4">
               {uploadState === "uploading" ? (
+                // Show progress indicator during upload
                 <div className="w-full max-w-xs space-y-4">
                   <Progress value={uploadProgress} />
                   <p className="text-sm text-center text-muted-foreground">
@@ -62,7 +84,9 @@ export function Uploader() {
                   </p>
                 </div>
               ) : (
+                // Show file selection UI when not uploading
                 <>
+                  {/* Upload icon */}
                   <div className="rounded-full bg-primary/10 p-4 mb-4">
                     <Upload className="h-8 w-8 text-primary" />
                   </div>
@@ -72,6 +96,7 @@ export function Uploader() {
                   <p className="text-sm text-muted-foreground mb-6">
                     or click to select files from your computer
                   </p>
+                  {/* File selection button with hidden input */}
                   <Button size="lg" className="relative">
                     Choose Files
                     <input
@@ -91,6 +116,7 @@ export function Uploader() {
         </CardContent>
       </Card>
 
+      {/* Share dialog shown after upload completion */}
       <ShareDialog 
         open={showShareDialog} 
         onOpenChange={setShowShareDialog}
