@@ -17,6 +17,7 @@ interface Environments {
   mongoUri: string;     // MongoDB connection string
   gcpProjectId: string; // Google Cloud Platform project ID
   gcpBucketName: string; // GCP Storage bucket name for file storage
+  gcpServiceAccountPath: string; // GCP Service Account path
   fileExpiryDays: number; // Number of days after which uploaded files expire
   maxDownloads: number;   // Maximum number of downloads allowed per file
 }
@@ -31,6 +32,7 @@ const env: Environments = {
   mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/quicksend',
   gcpProjectId: process.env.GCP_PROJECT_ID || '',
   gcpBucketName: process.env.GCP_BUCKET_NAME || '',
+  gcpServiceAccountPath: process.env.GCP_SERVICE_ACCOUNT_PATH || '',
   fileExpiryDays: parseInt(process.env.FILE_EXPIRY_DAYS || '7', 10),
   maxDownloads: parseInt(process.env.MAX_DOWNLOADS || '100', 10),
 };

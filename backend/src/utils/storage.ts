@@ -3,9 +3,10 @@ import path from 'path';
 import fs from 'fs';
 import env from '../config/environments';
 
-// Initialize storage
+// Initialize storage with service account credentials
 const storage = new Storage({
   projectId: env.gcpProjectId,
+  keyFilename: env.gcpServiceAccountPath,
 });
 
 const bucket = storage.bucket(env.gcpBucketName);

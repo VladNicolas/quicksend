@@ -3,3 +3,12 @@ dist
 .env
 .env.local
 .DS_Store
+
+# GCP Service Account Key
+gcp-service-account.json
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.node.json
+!tsconfig.app.json
