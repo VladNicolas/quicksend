@@ -57,8 +57,17 @@ export const deleteFile = async (filePath: string): Promise<void> => {
   }
 };
 
+/**
+ * Gets a public URL for a file in Google Cloud Storage
+ * @param filePath - Path to the file in the bucket
+ */
+export const getFileUrl = (filePath: string): string => {
+  return `https://storage.googleapis.com/${env.gcpBucketName}/${filePath}`;
+};
+
 export default {
   uploadFile,
   getFileStream,
   deleteFile,
+  getFileUrl,
 }; 
