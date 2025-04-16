@@ -3,6 +3,7 @@ dist
 .env
 .env.local
 .DS_Store
+DEVELOPMENT_PLAN.txt
 
 # GCP Service Account Key
 gcp-service-account.json

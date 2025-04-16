@@ -7,7 +7,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
-import connectDB from './config/database';
+// import connectDB from './config/database'; // Remove MongoDB connection
+import './config/firebase'; // Import to initialize Firebase Admin SDK
 import env from './config/environments';
 import fileRoutes from './routes/fileRoutes';
 import errorHandler from './middleware/errorHandler';
@@ -16,7 +17,7 @@ import errorHandler from './middleware/errorHandler';
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 // Initialize database connection
-connectDB();
+// connectDB(); // Remove MongoDB connection call
 
 // Create Express application instance
 const app = express();

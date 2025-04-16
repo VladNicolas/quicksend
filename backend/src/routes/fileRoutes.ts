@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import os from 'os';
 import fileController from '../controllers/fileController';
+import authMiddleware from '../middleware/authMiddleware';
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ const upload = multer({
 });
 
 // Routes
-router.post('/upload', upload.single('file'), fileController.uploadFile);
+router.post('/upload', authMiddleware, upload.single('file'), fileController.uploadFile);
 router.get('/files/:shareToken', fileController.getFileInfo);
 router.get('/download/:shareToken', fileController.downloadFile);
 

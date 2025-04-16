@@ -4,7 +4,10 @@
  * Allows users to select files via drag-and-drop or file browser
  * Displays upload progress and opens share dialog upon completion
  */
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import axios, { AxiosProgressEvent } from "axios"
+import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import Firebase auth functions
+import firebaseApp from "@/lib/firebase"; // Corrected import path and use default import
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -16,9 +19,18 @@ import {
 import { Upload } from "lucide-react"
 import { ShareDialog } from "./ShareDialog"
 import { Progress } from "./components/ui/progress"
+import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
+import { AlertTriangle } from "lucide-react"
 
 // Type definition for tracking the upload state
-type UploadState = "idle" | "uploading" | "complete"
+type UploadState = "idle" | "uploading" | "complete" | "error"
+
+// Define the expected API response structure
+interface UploadResponse {
+  message: string
+  shareToken: string
+  expiryDate: string
+}
 
 export function Uploader() {
   // State to store the selected files
@@ -29,39 +41,114 @@ export function Uploader() {
   const [uploadProgress, setUploadProgress] = useState(0)
   // State to control the visibility of the share dialog
   const [showShareDialog, setShowShareDialog] = useState(false)
+  // State to store the share token after successful upload
+  const [shareToken, setShareToken] = useState<string | null>(null)
+  // State to store any upload error messages
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // State to store the current Firebase user
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Effect to listen for auth state changes
+  useEffect(() => {
+    const auth = getAuth(firebaseApp);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      // Optionally reset uploader if user logs out during interaction
+      if (!user) {
+         resetUploader();
+      }
+    });
+    return () => unsubscribe(); // Cleanup subscription on unmount
+  }, []);
 
   /**
    * Handles file selection from the file input
-   * Triggers the upload simulation when files are selected
+   * Triggers the actual upload when files are selected
    */
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = event.target.files
     if (selectedFiles && selectedFiles.length > 0) {
+      // Check if user is logged in before allowing selection/upload
+      if (!currentUser) {
+        setErrorMessage("Please log in to upload files.");
+        setUploadState("error");
+        return;
+      }
       setFiles(selectedFiles)
-      simulateUpload()
+      handleUpload(selectedFiles)
     }
   }
 
   /**
-   * Simulates the file upload process
-   * Incrementally updates progress and shows share dialog when complete
-   * Note: This is a mock implementation; real implementation would use API calls
+   * Handles the actual file upload process using Axios
    */
-  const simulateUpload = () => {
+  const handleUpload = async (selectedFiles: FileList) => {
+    if (!selectedFiles || selectedFiles.length === 0) return
+    if (!currentUser) {
+      setErrorMessage("Authentication error: No user logged in.");
+      setUploadState("error");
+      return; // Should not happen if checked in handleFileSelect, but good practice
+    }
+
+    // For simplicity, we'll upload the first file only.
+    // TODO: Implement multi-file upload logic if needed.
+    const fileToUpload = selectedFiles[0]
+
+    // Reset state before starting upload
     setUploadState("uploading")
     setUploadProgress(0)
-    
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          setUploadState("complete")
-          setShowShareDialog(true)
-          return 100
-        }
-        return prev + 10
+    setErrorMessage(null)
+    setShareToken(null)
+
+    const formData = new FormData()
+    formData.append("file", fileToUpload)
+
+    try {
+      // Get the ID token
+      const idToken = await currentUser.getIdToken();
+
+      const response = await axios.post<UploadResponse>("/api/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          "Authorization": `Bearer ${idToken}` // Add Authorization header
+        },
+        onUploadProgress: (progressEvent: AxiosProgressEvent) => {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / (progressEvent.total ?? 1)
+          )
+          setUploadProgress(percentCompleted)
+        },
       })
-    }, 150)
+
+      if (response.status === 201 && response.data.shareToken) {
+        setShareToken(response.data.shareToken)
+        setUploadState("complete")
+        setShowShareDialog(true)
+      } else {
+        // Handle unexpected success response
+        throw new Error(response.data.message || "Upload failed with unexpected status.")
+      }
+    } catch (error) {
+      console.error("Upload error:", error)
+      let message = "An unknown error occurred during upload."
+      if (axios.isAxiosError(error)) {
+        message = error.response?.data?.error || error.message
+      } else if (error instanceof Error) {
+        message = error.message
+      }
+      setErrorMessage(message)
+      setUploadState("error")
+    }
+  }
+
+  // Helper function to reset the uploader state
+  const resetUploader = () => {
+    setFiles(null)
+    setUploadState("idle")
+    setUploadProgress(0)
+    setErrorMessage(null)
+    setShareToken(null)
+    setShowShareDialog(false)
   }
 
   return (
@@ -72,7 +159,13 @@ export function Uploader() {
           <CardDescription>Secure, fast, and free file sharing</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Upload area with drag-and-drop functionality */}
+          {errorMessage && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Upload Failed</AlertTitle>
+              <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
+          )}
           <div className="border-2 border-dashed border-primary/25 rounded-lg bg-secondary/50 transition-colors hover:border-primary/50">
             <div className="flex flex-col items-center justify-center py-16 px-4">
               {uploadState === "uploading" ? (
@@ -80,11 +173,17 @@ export function Uploader() {
                 <div className="w-full max-w-xs space-y-4">
                   <Progress value={uploadProgress} />
                   <p className="text-sm text-center text-muted-foreground">
-                    Uploading {files?.length} file{files?.length !== 1 ? 's' : ''}...
+                    Uploading {files && files[0] ? `"${files[0].name}"` : 'file'}...
                   </p>
                 </div>
+              ) : uploadState === "complete" ? (
+                // Show completion message and button to upload another
+                <div className="text-center">
+                  <p className="text-lg font-medium mb-4">Upload Complete!</p>
+                  <Button onClick={resetUploader}>Upload Another File</Button>
+                </div>
               ) : (
-                // Show file selection UI when not uploading
+                // Show file selection UI (idle or error state)
                 <>
                   {/* Upload icon */}
                   <div className="rounded-full bg-primary/10 p-4 mb-4">
@@ -107,7 +206,7 @@ export function Uploader() {
                     />
                   </Button>
                   <p className="text-xs text-muted-foreground mt-4">
-                    Maximum file size: 10MB
+                    Maximum file size: 100MB
                   </p>
                 </>
               )}
@@ -117,10 +216,12 @@ export function Uploader() {
       </Card>
 
       {/* Share dialog shown after upload completion */}
-      <ShareDialog 
-        open={showShareDialog} 
+      <ShareDialog
+        open={showShareDialog}
         onOpenChange={setShowShareDialog}
         fileCount={files?.length ?? 0}
+        shareToken={shareToken}
+        onClose={resetUploader}
       />
     </>
   )

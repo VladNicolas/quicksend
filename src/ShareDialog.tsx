@@ -13,8 +13,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Link, Mail } from "lucide-react"
-import { useState } from "react"
+import { Link, Mail, Check, Copy } from "lucide-react"
+import { useState, useEffect } from "react"
 
 /**
  * Props interface for the ShareDialog component
@@ -23,37 +23,74 @@ interface ShareDialogProps {
   open: boolean               // Controls dialog visibility
   onOpenChange: (open: boolean) => void  // Handler for dialog open state changes
   fileCount: number           // Number of files being shared
+  shareToken: string | null    // Added shareToken prop
+  onClose?: () => void         // Added optional onClose callback
 }
 
-export function ShareDialog({ open, onOpenChange, fileCount }: ShareDialogProps) {
+export function ShareDialog({
+  open,
+  onOpenChange,
+  fileCount,
+  shareToken,
+  onClose,
+}: ShareDialogProps) {
   // State for the email recipient address
   const [email, setEmail] = useState("")
   // State to track whether link was successfully copied
   const [copySuccess, setCopySuccess] = useState(false)
-  
-  // Mock function to simulate link generation
-  // In a real implementation, this would come from the backend API
-  const shareLink = "https://quicksend.example/f/abc123"
+  // State to hold the constructed share link
+  const [shareLink, setShareLink] = useState("")
+
+  // Effect to construct the share link when shareToken changes
+  useEffect(() => {
+    if (shareToken) {
+      // Construct the full URL based on the current origin
+      const baseUrl = window.location.origin
+      setShareLink(`${baseUrl}/api/download/${shareToken}`)
+    } else {
+      setShareLink("") // Reset if no token
+    }
+  }, [shareToken])
+
+  // Effect to call onClose when the dialog closes
+  useEffect(() => {
+    if (!open && onClose) {
+      // Slight delay to allow animation before reset
+      const timer = setTimeout(() => {
+        onClose()
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [open, onClose]);
 
   /**
    * Copies the share link to clipboard and shows success message
    */
   const handleCopyLink = async () => {
-    await navigator.clipboard.writeText(shareLink)
-    setCopySuccess(true)
-    setTimeout(() => setCopySuccess(false), 2000)
+    if (!shareLink) return
+    try {
+      await navigator.clipboard.writeText(shareLink)
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000) // Reset after 2 seconds
+    } catch (err) {
+      console.error("Failed to copy link: ", err)
+      // Optionally show an error message to the user
+    }
   }
 
   /**
    * Handles email form submission
-   * In a real implementation, this would send the link via API
+   * TODO: Replace mock with actual API call to backend for sending email
    */
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!shareLink) return
     // Mock email sending
-    console.log("Sending email to:", email)
+    console.log(`Simulating email send to: ${email} with link: ${shareLink}`)
+    // In a real app, call backend API here:
+    // await axios.post('/api/share/email', { recipient: email, shareToken });
     setEmail("")
-    onOpenChange(false)
+    onOpenChange(false) // Close dialog after submission
   }
 
   return (
@@ -82,18 +119,27 @@ export function ShareDialog({ open, onOpenChange, fileCount }: ShareDialogProps)
           {/* Link sharing content */}
           <TabsContent value="link" className="mt-4">
             <div className="flex flex-col space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Anyone with the link can download the file{fileCount !== 1 ? 's' : ''}.
+              </p>
               <div className="flex space-x-2">
                 <Input
+                  id="link"
                   readOnly
-                  value={shareLink}
-                  className="flex-1"
+                  value={shareLink || "Generating link..."}
+                  aria-label="Shareable link"
                 />
-                <Button onClick={handleCopyLink}>
-                  {copySuccess ? "Copied!" : "Copy"}
+                <Button variant="outline" size="icon" onClick={handleCopyLink} disabled={!shareLink}>
+                  {copySuccess ? (
+                    <Check className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">{copySuccess ? "Copied" : "Copy link"}</span>
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground">
-                Anyone with this link can download these files for the next 7 days
+                Link expires in 7 days or after 100 downloads.
               </p>
             </div>
           </TabsContent>
