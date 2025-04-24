@@ -109,11 +109,10 @@ function generateShareToken(): string {
 export const userProfileOperations = {
   // Create a new user profile
   async createUserProfile(userId: string, data: Omit<UserProfile, 'createdAt' | 'lastLogin' | 'usedStorage'>): Promise<void> {
-    // Extract email if provided, otherwise it remains undefined
     const { email, ...restData } = data;
     await firestore.collection(COLLECTIONS.USER_PROFILES).doc(userId).set({
-      ...restData, // Spread the rest of the data
-      email: email, // Explicitly set email (will be undefined if not provided)
+      ...restData,
+      email: email,
       createdAt: new Date(),
       lastLogin: new Date(),
       usedStorage: 0,
@@ -135,6 +134,13 @@ export const userProfileOperations = {
   async updateLastLogin(userId: string): Promise<void> {
     await firestore.collection(COLLECTIONS.USER_PROFILES).doc(userId).update({
       lastLogin: new Date(),
+    });
+  },
+
+  // Atomically update used storage
+  async updateUsedStorage(userId: string, sizeChange: number): Promise<void> {
+    await firestore.collection(COLLECTIONS.USER_PROFILES).doc(userId).update({
+      usedStorage: FieldValue.increment(sizeChange)
     });
   },
 }; 

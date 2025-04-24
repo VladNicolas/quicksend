@@ -4,7 +4,7 @@
  * Allows users to select files via drag-and-drop or file browser
  * Displays upload progress and opens share dialog upon completion
  */
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, DragEvent } from "react"
 import axios, { AxiosProgressEvent } from "axios"
 import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import Firebase auth functions
 import firebaseApp from "@/lib/firebase"; // Corrected import path and use default import
@@ -21,6 +21,7 @@ import { ShareDialog } from "./ShareDialog"
 import { Progress } from "./components/ui/progress"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
 import { AlertTriangle } from "lucide-react"
+import { cn } from "@/lib/utils" // Import cn utility for conditional classes
 
 // Type definition for tracking the upload state
 type UploadState = "idle" | "uploading" | "complete" | "error"
@@ -47,6 +48,10 @@ export function Uploader() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   // State to store the current Firebase user
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false); // State for drag feedback
+
+  // Log state on every render for debugging
+  console.log('Render - UploadState:', uploadState, 'ErrorMessage:', errorMessage);
 
   // Effect to listen for auth state changes
   useEffect(() => {
@@ -62,22 +67,47 @@ export function Uploader() {
   }, []);
 
   /**
-   * Handles file selection from the file input
-   * Triggers the actual upload when files are selected
+   * Handles file selection from the file input OR drag-and-drop
    */
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = event.target.files
+  const processSelectedFiles = (selectedFiles: FileList | null) => {
+    console.log('processSelectedFiles called');
+    // Clear previous error message on new attempt
+    setErrorMessage(null);
+    // Reset to idle if coming from error state
+    if (uploadState === 'error') {
+        console.log('Resetting state from error to idle');
+        setUploadState('idle');
+    }
+
     if (selectedFiles && selectedFiles.length > 0) {
-      // Check if user is logged in before allowing selection/upload
       if (!currentUser) {
+        console.error('Error: No user logged in for upload attempt');
         setErrorMessage("Please log in to upload files.");
         setUploadState("error");
         return;
       }
-      setFiles(selectedFiles)
-      handleUpload(selectedFiles)
+      // Client-side file size validation (10MB)
+      const maxSize = 10 * 1024 * 1024;
+      const fileToUpload = selectedFiles[0];
+      if (fileToUpload.size > maxSize) {
+          const errorMsg = `File size exceeds the 10MB limit. Yours is ${(fileToUpload.size / 1024 / 1024).toFixed(1)}MB.`;
+          console.log('Setting file size error:', errorMsg);
+          setErrorMessage(errorMsg);
+          setUploadState("error");
+          console.log('Exiting processSelectedFiles due to size error');
+          return;
+      }
+
+      console.log('File validation passed, proceeding to upload');
+      setFiles(selectedFiles);
+      handleUpload(selectedFiles);
     }
-  }
+  };
+
+  // Update handleFileSelect to use the common processing function
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    processSelectedFiles(event.target.files);
+  };
 
   /**
    * Handles the actual file upload process using Axios
@@ -143,6 +173,7 @@ export function Uploader() {
 
   // Helper function to reset the uploader state
   const resetUploader = () => {
+    console.log('resetUploader called!'); // Log when called
     setFiles(null)
     setUploadState("idle")
     setUploadProgress(0)
@@ -150,6 +181,46 @@ export function Uploader() {
     setShareToken(null)
     setShowShareDialog(false)
   }
+
+  // --- Drag and Drop Handlers --- START
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault(); // Necessary to allow dropping
+    event.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    console.log('handleDragLeave fired'); // Log when fired
+    // Check if the leave event target is outside the dropzone area
+    if (event.currentTarget.contains(event.relatedTarget as Node)) {
+       console.log('handleDragLeave ignored (leaving to child)');
+       return; // Ignore if leaving to a child element
+    }
+    console.log('handleDragLeave setting isDraggingOver = false');
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    console.log('handleDrop fired');
+    setIsDraggingOver(false);
+
+    const droppedFiles = event.dataTransfer.files;
+    processSelectedFiles(droppedFiles);
+  };
+  // --- Drag and Drop Handlers --- END
+
+  // Determine if input should be disabled
+  const isUploading = uploadState === 'uploading';
 
   return (
     <>
@@ -166,9 +237,18 @@ export function Uploader() {
               <AlertDescription>{errorMessage}</AlertDescription>
             </Alert>
           )}
-          <div className="border-2 border-dashed border-primary/25 rounded-lg bg-secondary/50 transition-colors hover:border-primary/50">
-            <div className="flex flex-col items-center justify-center py-16 px-4">
-              {uploadState === "uploading" ? (
+          <div
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={cn(
+              "border-2 border-dashed border-primary/25 rounded-lg bg-secondary/50 transition-colors",
+              isDraggingOver ? "border-primary bg-primary/10" : "hover:border-primary/50"
+            )}
+          >
+            <div className="flex flex-col items-center justify-center py-16 px-4 pointer-events-none">
+              {isUploading ? (
                 // Show progress indicator during upload
                 <div className="w-full max-w-xs space-y-4">
                   <Progress value={uploadProgress} />
@@ -185,28 +265,30 @@ export function Uploader() {
               ) : (
                 // Show file selection UI (idle or error state)
                 <>
-                  {/* Upload icon */}
                   <div className="rounded-full bg-primary/10 p-4 mb-4">
-                    <Upload className="h-8 w-8 text-primary" />
+                    <Upload className={cn("h-8 w-8 text-primary", isDraggingOver && "text-primary-foreground")} />
                   </div>
-                  <p className="text-lg font-medium mb-2">
+                  <p className={cn("text-lg font-medium mb-2", isDraggingOver && "text-primary-foreground")}>
                     Drag and drop your files here
                   </p>
-                  <p className="text-sm text-muted-foreground mb-6">
+                  <p className={cn("text-sm text-muted-foreground mb-6", isDraggingOver && "text-primary-foreground/80")}>
                     or click to select files from your computer
                   </p>
-                  {/* File selection button with hidden input */}
-                  <Button size="lg" className="relative">
-                    Choose Files
-                    <input
-                      type="file"
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      multiple
-                      onChange={handleFileSelect}
-                    />
-                  </Button>
+                  {/* File selection button - wrap in div to prevent pointer-events issue */}
+                  <div className="pointer-events-auto">
+                    <Button size="lg" className="relative">
+                      Choose Files
+                      <input
+                        type="file"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        multiple
+                        onChange={handleFileSelect}
+                        disabled={isUploading}
+                      />
+                    </Button>
+                  </div>
                   <p className="text-xs text-muted-foreground mt-4">
-                    Maximum file size: 100MB
+                    Maximum file size: 10MB
                   </p>
                 </>
               )}

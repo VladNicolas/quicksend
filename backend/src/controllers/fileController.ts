@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import { fileOperations, FileMetadata, userProfileOperations } from '../utils/firestore'; // Use Firestore utils
 import storage from '../utils/storage'; // Use GCS utils
 import env from '../config/environments'; // Import env for limits
+import { firestore } from '../config/firebase'; // Need firestore directly for query
+import { COLLECTIONS } from '../utils/firestore';
 
 /**
  * Upload a file
@@ -23,69 +25,98 @@ export const uploadFile = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const { originalname, mimetype, size, path: tempFilePath } = req.file;
+    const userId = req.user.uid;
+    const newFileSize = req.file.size;
+
+    // --- Storage Quota Check --- BEGIN
+    const userProfile = await userProfileOperations.getUserProfile(userId);
+
+    // Ensure profile exists (it should have been created on first interaction or needs backfill)
+    if (!userProfile) {
+        console.error(`Critical: User profile not found for ${userId} during upload quota check.`);
+        // Create profile on the fly? Or rely on backfill/previous creation?
+        // For now, let's create it if missing, assuming defaults are acceptable.
+        // Ideally, profile creation should be robustly handled elsewhere (e.g., on signup)
+         try {
+            await userProfileOperations.createUserProfile(userId, {
+                email: req.user.email,
+                storageQuota: 1 * 1024 * 1024 * 1024, // Default 1 GB
+                preferences: {}, 
+            });
+            console.log(`User profile created on-the-fly during upload for ${userId}.`);
+            // Re-fetch profile to get initial values
+            const refetchedProfile = await userProfileOperations.getUserProfile(userId);
+            if (!refetchedProfile) throw new Error("Failed to fetch newly created profile");
+            // Proceed with quota check using the newly created profile
+            if (newFileSize > refetchedProfile.storageQuota) { // Check against total quota for first file
+                res.status(413).json({ error: `File size (${(newFileSize / 1024 / 1024).toFixed(1)}MB) exceeds your total storage quota (${(refetchedProfile.storageQuota / 1024 / 1024 / 1024).toFixed(1)}GB).` });
+                return;
+            }
+            // If first file is within quota, usedStorage is 0, no further check needed here
+         } catch (profileError) {
+            console.error(`Error handling missing profile for ${userId} during upload:`, profileError);
+            res.status(500).json({ error: 'Error checking user storage quota.' });
+            return;
+         }
+    } else {
+        // Profile exists, check quota
+        const currentUsage = userProfile.usedStorage || 0; // Default to 0 if field missing (needs backfill)
+        const quota = userProfile.storageQuota;
+        if (currentUsage + newFileSize > quota) {
+            console.log(`Quota exceeded for user ${userId}. Usage: ${currentUsage}, New File: ${newFileSize}, Quota: ${quota}`);
+            res.status(413).json({ error: `Uploading this file would exceed your storage quota (${(quota / 1024 / 1024 / 1024).toFixed(1)}GB).` });
+            return;
+        }
+        // Update last activity timestamp if profile exists
+        userProfileOperations.updateLastLogin(userId); 
+    }
+    // --- Storage Quota Check --- END
+
+    // If quota check passes, proceed with upload
+    const { originalname, mimetype, path: tempFilePath } = req.file;
     const fileExtension = path.extname(originalname);
     const uniqueFilename = crypto.randomBytes(16).toString('hex') + fileExtension;
-    const userId = req.user.uid;
-
-    // Construct destination path using user ID
     const destinationPath = `users/${userId}/${uniqueFilename}`;
-    console.log(`Uploading to GCS path: ${destinationPath}`); // Log the path
+    console.log(`Uploading to GCS path: ${destinationPath}`);
 
-    // Upload file to GCS (storage util deletes temp file)
     await storage.uploadFile(tempFilePath, destinationPath);
-
-    // --- User Profile Check/Creation --- BEGIN
-    let userProfile = await userProfileOperations.getUserProfile(userId);
-
-    if (!userProfile) {
-      console.log(`User profile not found for ${userId}, creating one.`);
-      try {
-        // Extract email from decoded token (if available)
-        const userEmail = req.user.email;
-
-        await userProfileOperations.createUserProfile(userId, {
-          // Define default values for a new profile
-          email: userEmail, // Pass the email
-          storageQuota: 1 * 1024 * 1024 * 1024, // Default 1 GB quota
-          preferences: { // Example preferences
-            defaultPrivacy: 'private',
-            notifications: true,
-          },
-        });
-        console.log(`User profile created for ${userId}.`);
-        // Optionally re-fetch the profile if needed later, but not strictly necessary here
-      } catch (profileError) {
-        console.error(`Error creating user profile for ${userId}:`, profileError);
-        // Decide if this error should prevent file upload or just be logged
-        // For now, let's log and continue with the upload
-      }
-    } else {
-      // Optionally update last seen/activity timestamp
-       userProfileOperations.updateLastLogin(userId); // Re-using this to update activity
-    }
-    // --- User Profile Check/Creation --- END
 
     // Create file record in Firestore
     const fileData = {
       name: originalname,
-      size,
+      size: newFileSize,
       type: mimetype,
-      ownerId: req.user.uid,
+      ownerId: userId,
       status: 'uploaded' as const,
       storagePath: destinationPath,
     };
 
-    const { shareToken, expiryTimestamp } = await fileOperations.createFileMetadata(fileData);
+    const { id: fileId, shareToken, expiryTimestamp } = await fileOperations.createFileMetadata(fileData);
+
+    // --- Update Used Storage --- BEGIN
+    try {
+        await userProfileOperations.updateUsedStorage(userId, newFileSize);
+        console.log(`Updated usedStorage for user ${userId} by ${newFileSize}`);
+    } catch (storageUpdateError) {
+        console.error(`Failed to update usedStorage for user ${userId} after uploading file ${fileId}:`, storageUpdateError);
+        // Log this error, but don't fail the upload request itself as the file is already uploaded.
+        // A background job could reconcile storage later if needed.
+    }
+    // --- Update Used Storage --- END
 
     res.status(201).json({
       message: 'File uploaded successfully',
       shareToken: shareToken,
-      expiryDate: expiryTimestamp.toDate(), // Convert Firestore Timestamp to JS Date
+      expiryDate: expiryTimestamp.toDate(),
     });
-  } catch (error) {
-    console.error('Error uploading file:', error);
-    res.status(500).json({ error: 'Error uploading file' });
+  } catch (error: any) { // Catch specific multer error for file size
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        console.log('Multer rejected file due to size limit');
+        res.status(413).json({ error: `File exceeds the 10MB size limit.` });
+      } else {
+        console.error('Error uploading file:', error);
+        res.status(500).json({ error: 'Error uploading file' });
+      }
   }
 };
 
@@ -193,9 +224,62 @@ export const downloadFile = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-// Keep the export structure the same
+/**
+ * Get files uploaded by the authenticated user
+ * @route GET /api/my-files
+ */
+export const getMyFiles = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized: User not authenticated' });
+      return;
+    }
+    const userId = req.user.uid;
+
+    // 1. Fetch user's files
+    const filesSnapshot = await firestore.collection(COLLECTIONS.FILES)
+      .where('ownerId', '==', userId)
+      .orderBy('uploadDate', 'desc') // Optional: Order by upload date, newest first
+      .get();
+
+    const userFiles = filesSnapshot.docs.map(doc => {
+      const data = doc.data() as FileMetadata;
+      return {
+        id: doc.id, // Include Firestore document ID
+        name: data.name,
+        size: data.size,
+        type: data.type,
+        uploadDate: data.uploadDate.toDate(), // Convert Timestamp to Date
+        expiryTimestamp: data.expiryTimestamp.toDate(),
+        downloadCount: data.downloadCount,
+        shareToken: data.shareToken,
+      };
+    });
+
+    // 2. Fetch user profile for storage info
+    const userProfile = await userProfileOperations.getUserProfile(userId);
+
+    // Handle case where profile might be missing (though unlikely if they've uploaded)
+    const storageInfo = {
+      usedStorage: userProfile?.usedStorage ?? 0,
+      storageQuota: userProfile?.storageQuota ?? 1 * 1024 * 1024 * 1024, // Default 1GB if missing
+    };
+
+    res.status(200).json({
+      files: userFiles,
+      storage: storageInfo,
+    });
+
+  } catch (error) {
+    console.error('Error fetching user files:', error);
+    res.status(500).json({ error: 'Error fetching user files' });
+  }
+};
+
+// Update the default export to include the new function
 export default {
   uploadFile,
   getFileInfo,
   downloadFile,
+  getMyFiles,
 }; 

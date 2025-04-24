@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Link, Mail, Check, Copy } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 
 /**
  * Props interface for the ShareDialog component
@@ -40,6 +40,8 @@ export function ShareDialog({
   const [copySuccess, setCopySuccess] = useState(false)
   // State to hold the constructed share link
   const [shareLink, setShareLink] = useState("")
+  // Ref to track if the dialog was previously open
+  const wasOpenRef = useRef(false)
 
   // Effect to construct the share link when shareToken changes
   useEffect(() => {
@@ -52,16 +54,21 @@ export function ShareDialog({
     }
   }, [shareToken])
 
-  // Effect to call onClose when the dialog closes
+  // Effect to call onClose ONLY when closing
   useEffect(() => {
-    if (!open && onClose) {
-      // Slight delay to allow animation before reset
+    // Only call onClose if the dialog was open and is now closing
+    if (wasOpenRef.current && !open && onClose) {
       const timer = setTimeout(() => {
         onClose()
-      }, 150);
-      return () => clearTimeout(timer);
+      }, 150)
+      wasOpenRef.current = false // Update ref after triggering close logic
+      return () => clearTimeout(timer)
     }
-  }, [open, onClose]);
+    // Update the ref if the open state changes to true
+    if (open) {
+      wasOpenRef.current = true
+    }
+  }, [open, onClose])
 
   /**
    * Copies the share link to clipboard and shows success message

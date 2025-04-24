@@ -10,7 +10,8 @@
     "test": "jest",
     "test:storage": "ts-node src/test-storage.ts",
     "test:firestore": "ts-node src/test-firestore.ts",
-    "test:integration": "ts-node src/test-integration.ts"
+    "test:integration": "ts-node src/test-integration.ts",
+    "backfill:storage": "ts-node src/scripts/backfill-used-storage.ts"
   },
   "keywords": [],
   "author": "",

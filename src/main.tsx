@@ -2,18 +2,21 @@
  * Application entry point
  * Renders the root App component wrapped with necessary providers
  */
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext'
 
 // Create root element and render the application
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
     {/* Wrap app with authentication provider to enable auth features throughout the app */}
     <AuthProvider>
-      <App />
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
     </AuthProvider>
-  </StrictMode>,
+  </React.StrictMode>,
 )

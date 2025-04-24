@@ -23,12 +23,17 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage,
   limits: {
-    fileSize: 100 * 1024 * 1024 // 100MB limit
+    fileSize: 10 * 1024 * 1024 // 10MB limit
   }
 });
 
 // Routes
 router.post('/upload', authMiddleware, upload.single('file'), fileController.uploadFile);
+
+// New route for fetching user's files (protected)
+router.get('/my-files', authMiddleware, fileController.getMyFiles);
+
+// Public routes for file info and download
 router.get('/files/:shareToken', fileController.getFileInfo);
 router.get('/download/:shareToken', fileController.downloadFile);
 
