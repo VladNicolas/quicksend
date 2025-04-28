@@ -17,6 +17,7 @@ interface FileData {
   expiryTimestamp: string;
   downloadCount: number;
   shareToken: string;
+  previewUrl?: string; // Add optional preview URL
 }
 
 interface StorageInfo {
@@ -69,13 +70,44 @@ export function MyFilesPage() {
     fetchMyFiles();
   }, [currentUser]);
 
-  // Placeholder delete handler
-  const handleDeleteFile = (fileId: string, fileName: string) => {
-    console.log(`TODO: Implement deletion for file: ${fileName} (ID: ${fileId})`);
-    // Later (Step 5) this will call the DELETE /api/files/{fileId} endpoint
-    // and update the local 'files' state on success
-    // alert(`Deletion for ${fileName} not implemented yet.`);
+  // --- MODIFIED: Implement actual delete handler ---
+  const handleDeleteFile = async (fileId: string, fileName: string) => {
+    // Optional: Add a confirmation dialog here
+    // if (!window.confirm(`Are you sure you want to delete "${fileName}"?`)) {
+    //   return;
+    // }
+
+    if (!currentUser) {
+      setError("Cannot delete file: User not authenticated.");
+      return;
+    }
+
+    try {
+      const idToken = await currentUser.getIdToken();
+      await axios.delete(`/api/files/${fileId}`, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+
+      // Remove the file from the local state
+      setFiles(currentFiles => currentFiles.filter(file => file.id !== fileId));
+      
+      // TODO: Optionally refresh storageInfo if needed, or rely on backend to have updated it
+      // For now, we assume the change is small enough not to warrant immediate refresh
+
+      console.log(`Successfully initiated deletion for file: ${fileName} (ID: ${fileId})`);
+      // Optionally show a success notification
+
+    } catch (err) {
+      console.error(`Error deleting file ${fileId}:`, err);
+      let message = "Failed to delete file.";
+      if (axios.isAxiosError(err) && err.response?.data?.error) {
+        message = err.response.data.error;
+      }
+      setError(message); // Show error to the user
+      // Optionally show an error notification
+    }
   };
+  // --- END MODIFICATION ---
 
   if (isLoading) {
     // Render Skeleton Layout

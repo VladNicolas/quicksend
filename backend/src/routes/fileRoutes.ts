@@ -37,4 +37,7 @@ router.get('/my-files', authMiddleware, fileController.getMyFiles);
 router.get('/files/:shareToken', fileController.getFileInfo);
 router.get('/download/:shareToken', fileController.downloadFile);
 
+// New route for deleting a file (protected)
+router.delete('/files/:fileId', authMiddleware, fileController.deleteFile);
+
 export default router; 

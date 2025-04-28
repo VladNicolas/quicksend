@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -22,6 +22,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils"; // Import cn utility
 
+// --- REMOVED react-pdf setup ---
+// import { Document, Page, pdfjs } from 'react-pdf';
+// import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+// import 'react-pdf/dist/esm/Page/TextLayer.css';
+// pdfjs.GlobalWorkerOptions.workerSrc = `/pdf.worker.min.js`;
+// --- end REMOVED react-pdf setup ---
+
 // Interface matching the data structure from MyFilesPage
 interface FileData {
   id: string;
@@ -32,6 +39,7 @@ interface FileData {
   expiryTimestamp: string;
   downloadCount: number;
   shareToken: string;
+  previewUrl?: string; // Add optional preview URL
 }
 
 interface FileCardProps {
@@ -44,11 +52,31 @@ const getFileIcon = (mimeType: string): React.ReactNode => {
   if (mimeType.startsWith('image/')) return <FileImage className="h-8 w-8 text-primary" />;
   if (mimeType.startsWith('video/')) return <FileVideo className="h-8 w-8 text-blue-500" />;
   if (mimeType.startsWith('audio/')) return <FileAudio className="h-8 w-8 text-green-500" />;
-  if (mimeType === 'application/pdf') return <FileText className="h-8 w-8 text-red-500" />;
+  if (mimeType === 'application/pdf') return <FileText className="h-8 w-8 text-gray-500" />;
   if (mimeType.includes('text')) return <FileText className="h-8 w-8 text-gray-500" />;
   // Add more specific types if needed (e.g., Word, Excel)
   return <FileIcon className="h-8 w-8 text-muted-foreground" />; // Default
 };
+
+// --- SIMPLIFIED Component: FilePreview ---
+const FilePreview = ({ file }: { file: FileData }) => {
+  // Check for preview URL and image type
+  if (file.previewUrl && file.type.startsWith('image/')) {
+    return (
+      <img 
+        src={file.previewUrl} 
+        alt={`Preview of ${file.name}`}
+        className="h-12 w-12 object-cover rounded-sm" // Style the image preview
+        // Optional: Add onError fallback if needed, but less critical without PDF complexity
+        // onError={(e) => { (e.target as HTMLImageElement).src = '/path/to/generic-image-icon.png'; }}
+      />
+    );
+  }
+
+  // Fallback to icon if no preview URL or not an image
+  return getFileIcon(file.type);
+};
+// --- End FilePreview Component ---
 
 export function FileCard({ file, onDelete }: FileCardProps) {
 
@@ -80,7 +108,8 @@ export function FileCard({ file, onDelete }: FileCardProps) {
       )}>
       <CardHeader className="flex flex-row items-start gap-4 space-y-0 pb-3">
         <div className="flex-shrink-0">
-          {getFileIcon(file.type)}
+          {/* Use the new FilePreview component */}
+          <FilePreview file={file} /> 
         </div>
         <div className="flex-1 overflow-hidden">
           <CardTitle className="text-base font-medium truncate" title={file.name}>

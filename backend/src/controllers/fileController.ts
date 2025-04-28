@@ -6,6 +6,7 @@ import storage from '../utils/storage'; // Use GCS utils
 import env from '../config/environments'; // Import env for limits
 import { firestore } from '../config/firebase'; // Need firestore directly for query
 import { COLLECTIONS } from '../utils/firestore';
+import { logger } from '../config/logger'; // Import logger
 
 /**
  * Upload a file
@@ -79,19 +80,37 @@ export const uploadFile = async (req: Request, res: Response): Promise<void> => 
     const destinationPath = `users/${userId}/${uniqueFilename}`;
     console.log(`Uploading to GCS path: ${destinationPath}`);
 
-    await storage.uploadFile(tempFilePath, destinationPath);
+    // --- MODIFICATION START: Create Firestore doc first to get the ID ---
+    // Prepare Firestore data (without storagePath initially, maybe? Or with it?)
+    // Let's create the doc ID first, then upload with metadata, then set the data.
+    
+    const fileRef = firestore.collection(COLLECTIONS.FILES).doc();
+    const fileId = fileRef.id;
+    
+    // Now upload to GCS, including the Firestore ID in metadata
+    try {
+      await storage.uploadFile(tempFilePath, destinationPath, { firestoreId: fileId });
+      logger.info(`File uploaded to GCS with Firestore ID: ${fileId}`);
+    } catch (uploadError) {
+        logger.error(`GCS upload failed for ${destinationPath}:`, uploadError);
+        // If GCS upload fails, we shouldn't proceed to create the Firestore record or update quota
+        res.status(500).json({ error: 'Failed to store file in cloud storage.' });
+        return; // Stop execution
+    }
+    // --- MODIFICATION END ---
 
-    // Create file record in Firestore
+    // Create file record in Firestore using the generated ID
     const fileData = {
       name: originalname,
       size: newFileSize,
       type: mimetype,
       ownerId: userId,
       status: 'uploaded' as const,
-      storagePath: destinationPath,
+      storagePath: destinationPath, // Use the final path
     };
 
-    const { id: fileId, shareToken, expiryTimestamp } = await fileOperations.createFileMetadata(fileData);
+    // Use the fileRef obtained earlier to set the data
+    const { shareToken, expiryTimestamp } = await fileOperations.createFileMetadata(fileData, fileRef);
 
     // --- Update Used Storage --- BEGIN
     try {
@@ -239,22 +258,53 @@ export const getMyFiles = async (req: Request, res: Response): Promise<void> => 
     // 1. Fetch user's files
     const filesSnapshot = await firestore.collection(COLLECTIONS.FILES)
       .where('ownerId', '==', userId)
-      .orderBy('uploadDate', 'desc') // Optional: Order by upload date, newest first
+      .orderBy('uploadDate', 'desc')
       .get();
 
-    const userFiles = filesSnapshot.docs.map(doc => {
+    // --- MODIFICATION START: Generate signed URLs conditionally ---
+    // Process files and generate signed URLs concurrently
+    const userFilesPromises = filesSnapshot.docs.map(async (doc) => {
       const data = doc.data() as FileMetadata;
+      let previewUrl: string | null = null;
+
+      // --- MODIFICATION: Prioritize thumbnail path --- 
+      const pathToSign = data.thumbnailPath || (data.type.startsWith('image/') ? data.storagePath : null);
+      
+      // --- ADDED: Debug logging for paths ---
+      if (data.type.startsWith('image/')) { // Only log for images
+          logger.debug(`getMyFiles - File: ${data.name} (ID: ${doc.id})`);
+          logger.debug(`  Type: ${data.type}`);
+          logger.debug(`  Firestore thumbnailPath: ${data.thumbnailPath}`);
+          logger.debug(`  Firestore storagePath: ${data.storagePath}`);
+          logger.debug(`  Path chosen for signing: ${pathToSign}`);
+      }
+      // --- END ADDED ---
+
+      if (pathToSign) { // Only generate URL if we have a path (thumb or original image)
+        try {
+          previewUrl = await storage.generateV4ReadSignedUrl(pathToSign);
+        } catch (urlError) {
+          logger.error(`Failed to generate preview URL for ${pathToSign}:`, urlError);
+        }
+      }
+
       return {
-        id: doc.id, // Include Firestore document ID
+        id: doc.id,
         name: data.name,
         size: data.size,
         type: data.type,
-        uploadDate: data.uploadDate.toDate(), // Convert Timestamp to Date
+        uploadDate: data.uploadDate.toDate(),
         expiryTimestamp: data.expiryTimestamp.toDate(),
         downloadCount: data.downloadCount,
         shareToken: data.shareToken,
+        previewUrl: previewUrl, // Include the generated URL (or null)
+        // Note: We no longer return storagePath to the frontend
       };
     });
+
+    // Wait for all promises to resolve
+    const userFiles = await Promise.all(userFilesPromises);
+    // --- MODIFICATION END ---
 
     // 2. Fetch user profile for storage info
     const userProfile = await userProfileOperations.getUserProfile(userId);
@@ -276,10 +326,91 @@ export const getMyFiles = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
+/**
+ * Delete a file owned by the authenticated user
+ * @route DELETE /api/files/:fileId
+ */
+export const deleteFile = async (req: Request, res: Response): Promise<void> => {
+    try {
+        if (!req.user) {
+            logger.warn('Attempt to delete file without authentication.');
+            res.status(401).json({ error: 'Unauthorized: User not authenticated' });
+            return;
+        }
+        const userId = req.user.uid;
+        const { fileId } = req.params;
+
+        if (!fileId) {
+            res.status(400).json({ error: 'Bad Request: Missing file ID' });
+            return;
+        }
+
+        logger.info(`User ${userId} attempting to delete file ${fileId}`);
+
+        // 1. Fetch file metadata
+        const fileMetadata = await fileOperations.getFileMetadata(fileId); // Corrected function name
+
+        if (!fileMetadata) {
+            logger.warn(`File not found for deletion: ${fileId} by user ${userId}`);
+            res.status(404).json({ error: 'File not found' });
+            return;
+        }
+
+        // 2. Verify ownership
+        if (fileMetadata.ownerId !== userId) {
+            logger.warn(`Forbidden: User ${userId} attempted to delete file ${fileId} owned by ${fileMetadata.ownerId}`);
+            res.status(403).json({ error: 'Forbidden: You do not own this file' });
+            return;
+        }
+
+        const fileSize = fileMetadata.size;
+        const storagePath = fileMetadata.storagePath;
+
+        // 3. Delete file from GCS
+        try {
+            await storage.deleteFile(storagePath);
+            logger.info(`Successfully deleted file from GCS: ${storagePath}`);
+        } catch (gcsError) {
+            logger.error(`Failed to delete file from GCS: ${storagePath}. Error:`, gcsError);
+            // Proceed to delete metadata but log the GCS error. Might require manual cleanup later.
+            // Alternatively, you could stop here and return an error.
+            // Let's proceed for now to ensure metadata consistency.
+        }
+
+        // 4. Delete file metadata from Firestore
+        try {
+            await fileOperations.deleteFileMetadata(fileId);
+            logger.info(`Successfully deleted file metadata from Firestore: ${fileId}`);
+        } catch (firestoreError) {
+            logger.error(`Failed to delete file metadata from Firestore: ${fileId}. Error:`, firestoreError);
+            // If metadata deletion fails after GCS deletion, this is problematic.
+            // Consider mechanisms for reconciliation.
+            res.status(500).json({ error: 'Failed to delete file record. Please try again.' });
+            return;
+        }
+
+        // 5. Update user's used storage (decrement)
+        try {
+            await userProfileOperations.updateUsedStorage(userId, -fileSize); // Pass negative size
+            logger.info(`Updated usedStorage for user ${userId} by ${-fileSize} after deleting file ${fileId}`);
+        } catch (storageUpdateError) {
+            logger.error(`Failed to update usedStorage for user ${userId} after deleting file ${fileId}. Error:`, storageUpdateError);
+            // Log this error, but the main deletion was successful.
+        }
+
+        res.status(200).json({ message: 'File deleted successfully' });
+
+    } catch (error) {
+        logger.error('Error deleting file:', error);
+        res.status(500).json({ error: 'Internal server error during file deletion' });
+    }
+};
+
 // Update the default export to include the new function
 export default {
   uploadFile,
   getFileInfo,
   downloadFile,
   getMyFiles,
+  deleteFile,
 }; 

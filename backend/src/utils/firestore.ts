@@ -22,6 +22,7 @@ export interface FileMetadata {
   lastDownloaded?: Date;
   storagePath: string;
   metadata?: Record<string, any>;
+  thumbnailPath?: string;
 }
 
 // User profile interface - only application-specific data
@@ -40,9 +41,11 @@ export interface UserProfile {
 
 // File operations
 export const fileOperations = {
-  // Create a new file metadata entry
-  async createFileMetadata(data: Omit<FileMetadata, 'uploadDate' | 'downloadCount' | 'expiryTimestamp' | 'shareToken'>): Promise<{ id: string; shareToken: string; expiryTimestamp: Timestamp }> {
-    const fileRef = firestore.collection(COLLECTIONS.FILES).doc();
+  // Create a new file metadata entry using a pre-created DocumentReference
+  async createFileMetadata(
+    data: Omit<FileMetadata, 'uploadDate' | 'downloadCount' | 'expiryTimestamp' | 'shareToken'>, 
+    fileRef: any // Explicitly set to any to satisfy linter
+  ): Promise<{ shareToken: string; expiryTimestamp: Timestamp }> {
     const now = Timestamp.fromDate(new Date());
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + 7); // 7 days from now
@@ -56,8 +59,9 @@ export const fileOperations = {
       shareToken: shareToken,
     };
 
-    await fileRef.set(fileData);
-    return { id: fileRef.id, shareToken: shareToken, expiryTimestamp: fileData.expiryTimestamp };
+    await fileRef.set(fileData); // Use the passed-in reference
+    // Return only shareToken and expiryTimestamp, as ID is already known by caller
+    return { shareToken: shareToken, expiryTimestamp: fileData.expiryTimestamp };
   },
 
   // Get file metadata by ID
