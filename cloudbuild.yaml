@@ -1,0 +1,84 @@
+steps:
+  # 1. Build Frontend Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+        'build',
+        '-t',
+        '${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/quicksend-frontend/quicksend-frontend:$COMMIT_SHA',
+        '-f',
+        'Dockerfile',
+        '.'
+      ]
+    id: 'Build Frontend'
+
+  # 2. Build Backend Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+        'build',
+        '-t',
+        '${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/quicksend-backend/quicksend-backend:$COMMIT_SHA',
+        '-f',
+        'backend/Dockerfile',
+        './backend' # Context for backend build is the backend directory
+      ]
+    id: 'Build Backend'
+
+  # 3. Push Frontend image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/quicksend-frontend/quicksend-frontend:$COMMIT_SHA']
+    id: 'Push Frontend'
+    waitFor: ['Build Frontend']
+
+  # 4. Push Backend image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/quicksend-backend/quicksend-backend:$COMMIT_SHA']
+    id: 'Push Backend'
+    waitFor: ['Build Backend']
+
+  # 5. Deploy Frontend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      [
+        'run', 'deploy', '${_FRONTEND_SERVICE_NAME}',
+        '--image', '${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/quicksend-frontend/quicksend-frontend:$COMMIT_SHA',
+        '--region', '${_CLOUDRUN_REGION}',
+        '--platform', 'managed',
+        '--allow-unauthenticated' # Allow public access to the frontend service
+        # Add other flags if needed, e.g., --set-env-vars
+      ]
+    id: 'Deploy Frontend'
+    waitFor: ['Push Frontend']
+
+  # 6. Deploy Backend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      [
+        'run', 'deploy', '${_BACKEND_SERVICE_NAME}',
+        '--image', '${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/quicksend-backend/quicksend-backend:$COMMIT_SHA',
+        '--region', '${_CLOUDRUN_REGION}',
+        '--platform', 'managed',
+        # '--no-allow-unauthenticated', # Typically backend should not be public
+        '--service-account', '${_BACKEND_SERVICE_ACCOUNT}', # Run as specific service account
+        '--set-env-vars', '^##^DATABASE_URL=your-db-url##GCS_BUCKET_NAME=your-bucket-name' # Example env vars, use Secret Manager in reality
+        # Add other flags like --port=5000 if needed (Cloud Run defaults often work)
+      ]
+    id: 'Deploy Backend'
+    waitFor: ['Push Backend']
+
+# Define images to push (results of build steps)
+images:
+  - '${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/quicksend-frontend/quicksend-frontend:$COMMIT_SHA'
+  - '${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/quicksend-backend/quicksend-backend:$COMMIT_SHA'
+
+# Default Substitutions (can be overridden in Trigger)
+substitutions:
+  _AR_REGION: 'us-central1' # Artifact Registry Region
+  _CLOUDRUN_REGION: 'us-central1' # Cloud Run Region
+  _FRONTEND_SERVICE_NAME: 'quicksend-frontend-service' # Choose your Cloud Run service name
+  _BACKEND_SERVICE_NAME: 'quicksend-backend-service' # Choose your Cloud Run service name
+  _BACKEND_SERVICE_ACCOUNT: 'quicksend-backend@fleet-parsec-425911-i7.iam.gserviceaccount.com' # IMPORTANT: Replace with your actual service account email
+
+options:
+  logging: CLOUD_LOGGING_ONLY 

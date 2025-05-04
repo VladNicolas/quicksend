@@ -1,0 +1,34 @@
+# Git files
+.git
+.gitignore
+
+# Node modules
+node_modules
+
+# Build output (handled by multi-stage build)
+dist
+build
+out
+
+# Backend directory (don't include in frontend context)
+backend
+
+# Environment variables
+.env*
+*.env
+
+# Docker files (don't include themselves)
+Dockerfile
+.dockerignore
+
+# IDE specific files
+.idea
+.vscode
+
+# OS specific files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+Thumbs.db
+.DS_Store 
