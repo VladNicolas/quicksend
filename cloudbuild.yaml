@@ -4,7 +4,8 @@ steps:
     id: 'Verify API Key Secret'
     entrypoint: 'sh'
     # Use tail -c 5 for better compatibility with basic sh
-    args: ['-c', 'echo "Verifying VITE_FIREBASE_API_KEY ends with: ***$(echo -n $VITE_FIREBASE_API_KEY | tail -c 5)***"' ]
+    # Escape $ with $$ to prevent Cloud Build substitution
+    args: ['-c', 'echo "Verifying VITE_FIREBASE_API_KEY ends with: ***$(echo -n $$VITE_FIREBASE_API_KEY | tail -c 5)***"' ]
     # This step also needs access to the secret to print it
     secretEnv: ['VITE_FIREBASE_API_KEY']
 
