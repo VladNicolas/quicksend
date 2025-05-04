@@ -1,7 +1,17 @@
 steps:
+  # TEMPORARY DEBUG STEP: Print the end of the API key seen by the build env
+  - name: 'ubuntu' # Use a simple image with echo
+    id: 'Verify API Key Secret'
+    entrypoint: 'sh'
+    args: ['-c', 'echo "Verifying VITE_FIREBASE_API_KEY ends with: ***${VITE_FIREBASE_API_KEY: -5}***"' ]
+    # This step also needs access to the secret to print it
+    secretEnv: ['VITE_FIREBASE_API_KEY']
+
   # 1. Build Frontend Docker image
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build Frontend'
+    # This step depends on the API key verification step (optional, but good practice)
+    waitFor: ['Verify API Key Secret']
     args: [
         'build',
         '-t',
