@@ -4,7 +4,7 @@
  * Allows users to select files via drag-and-drop or file browser
  * Displays upload progress and opens share dialog upon completion
  */
-import { useState, useEffect, useRef, DragEvent } from "react"
+import { useState, useEffect, DragEvent } from "react"
 import axios, { AxiosProgressEvent } from "axios"
 import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import Firebase auth functions
 import firebaseApp from "@/lib/firebase"; // Corrected import path and use default import

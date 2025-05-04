@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "./components/ui/dropdown-menu";
-import { User, LogOut, Files, Star, Info } from "lucide-react"; // Added Files, Star, Info icons
+import { User, LogOut, Files } from "lucide-react"; // Added Files, Star, Info icons
 
 function Header() {
   const { currentUser, logout } = useAuth();
