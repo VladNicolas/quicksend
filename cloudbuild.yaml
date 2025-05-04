@@ -60,8 +60,8 @@ steps:
         '--region', '${_CLOUDRUN_REGION}',
         '--platform', 'managed',
         # '--no-allow-unauthenticated', # Typically backend should not be public
-        '--service-account', '${_BACKEND_SERVICE_ACCOUNT}', # Run as specific service account
-        '--set-env-vars', '^##^DATABASE_URL=your-db-url##GCS_BUCKET_NAME=your-bucket-name' # Example env vars, use Secret Manager in reality
+        '--service-account', '${_BACKEND_SERVICE_ACCOUNT}' # Run as specific service account
+        # Env vars like GCP_BUCKET_NAME should be mounted via Cloud Run secret config, not set here.
         # Add other flags like --port=5000 if needed (Cloud Run defaults often work)
       ]
     id: 'Deploy Backend'
