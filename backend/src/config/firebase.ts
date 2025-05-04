@@ -3,12 +3,17 @@ import env from './environments';
 
 // Initialize Firebase Admin if it hasn't been initialized yet
 if (!admin.apps.length) {
+  console.log('Initializing Firebase Admin SDK...');
+  // When running in Cloud Run with an attached service account,
+  // the SDK automatically uses Application Default Credentials.
+  // Do NOT use admin.credential.cert() here.
   admin.initializeApp({
-    credential: admin.credential.cert(env.gcpServiceAccountPath),
-    storageBucket: env.gcpBucketName,
-    databaseURL: `https://${env.gcpProjectId}.firebaseio.com`,
+    // No 'credential' field needed when using ADC
+    storageBucket: env.gcpBucketName, 
     projectId: env.gcpProjectId,
+    // databaseURL is generally for Realtime Database, not Firestore
   });
+  console.log('Firebase Admin SDK Initialized.');
 }
 
 // Get Firestore instance for the specific database
