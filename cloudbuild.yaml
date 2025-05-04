@@ -3,7 +3,8 @@ steps:
   - name: 'ubuntu' # Use a simple image with echo
     id: 'Verify API Key Secret'
     entrypoint: 'sh'
-    args: ['-c', 'echo "Verifying VITE_FIREBASE_API_KEY ends with: ***${VITE_FIREBASE_API_KEY: -5}***"' ]
+    # Use tail -c 5 for better compatibility with basic sh
+    args: ['-c', 'echo "Verifying VITE_FIREBASE_API_KEY ends with: ***$(echo -n $VITE_FIREBASE_API_KEY | tail -c 5)***"' ]
     # This step also needs access to the secret to print it
     secretEnv: ['VITE_FIREBASE_API_KEY']
 
