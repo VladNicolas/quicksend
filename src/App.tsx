@@ -1,7 +1,7 @@
 /**
  * Main App component
  * Serves as the top-level component for the QuickSend application
- * Contains the header and main content area with the file uploader
+ * Contains the header and main content area with the file uploaderr
  */
 import './App.css'
 import Header from './Header'
