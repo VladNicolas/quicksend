@@ -34,5 +34,5 @@ COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 EXPOSE 8080
 
 # Start Nginx after substituting the port from the PORT environment variable
-# The CMD instruction uses sh -c to allow environment variable substitution
-CMD ["sh", "-c", "envsubst \'$PORT\' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"] 
+# Use shell form of CMD and escape $PORT for envsubst
+CMD sh -c "envsubst '\$PORT' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'" 
