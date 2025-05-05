@@ -1,5 +1,5 @@
 steps:
-  # 1. Build Frontend Docker image
+  # 1. Build Frontend Docker image using substitutions for Firebase config
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build Frontend'
     args: [
@@ -8,18 +8,22 @@ steps:
         '${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/quicksend-frontend/quicksend-frontend:$COMMIT_SHA',
         '-f',
         'Dockerfile',
-        # No --build-arg needed; build process relies on env vars from secretEnv
+        # Pass trigger substitution variables as build arguments
+        '--build-arg',
+        'VITE_FIREBASE_API_KEY=${_VITE_FIREBASE_API_KEY}',
+        '--build-arg',
+        'VITE_FIREBASE_AUTH_DOMAIN=${_VITE_FIREBASE_AUTH_DOMAIN}',
+        '--build-arg',
+        'VITE_FIREBASE_PROJECT_ID=${_VITE_FIREBASE_PROJECT_ID}',
+        '--build-arg',
+        'VITE_FIREBASE_STORAGE_BUCKET=${_VITE_FIREBASE_STORAGE_BUCKET}',
+        '--build-arg',
+        'VITE_FIREBASE_MESSAGING_SENDER_ID=${_VITE_FIREBASE_MESSAGING_SENDER_ID}',
+        '--build-arg',
+        'VITE_FIREBASE_APP_ID=${_VITE_FIREBASE_APP_ID}',
         '.'
       ]
-    # Define secrets to be directly available as VITE_* env vars to the build step
-    secretEnv: [
-      'VITE_FIREBASE_API_KEY',
-      'VITE_FIREBASE_AUTH_DOMAIN',
-      'VITE_FIREBASE_PROJECT_ID',
-      'VITE_FIREBASE_STORAGE_BUCKET',
-      'VITE_FIREBASE_MESSAGING_SENDER_ID',
-      'VITE_FIREBASE_APP_ID'
-      ]
+    # No secretEnv needed here as we are using substitutions via --build-arg
 
   # 2. Build Backend Docker image
   - name: 'gcr.io/cloud-builders/docker'
@@ -89,23 +93,6 @@ substitutions:
   _FRONTEND_SERVICE_NAME: 'quicksend-frontend-service' # Choose your Cloud Run service name
   _BACKEND_SERVICE_NAME: 'quicksend-backend-service' # Choose your Cloud Run service name
   _BACKEND_SERVICE_ACCOUNT: 'quicksend-backend@fleet-parsec-425911-i7.iam.gserviceaccount.com' # IMPORTANT: Replace with your actual service account email
-
-# Define available secrets for the build steps
-# Map secrets directly to VITE_* env vars
-availableSecrets:
-  secretManager:
-  - versionName: projects/$PROJECT_ID/secrets/quicksend-frontend-firebase-api-key/versions/latest
-    env: 'VITE_FIREBASE_API_KEY'
-  - versionName: projects/$PROJECT_ID/secrets/quicksend-frontend-firebase-auth-domain/versions/latest
-    env: 'VITE_FIREBASE_AUTH_DOMAIN'
-  - versionName: projects/$PROJECT_ID/secrets/quicksend-frontend-firebase-project-id/versions/latest
-    env: 'VITE_FIREBASE_PROJECT_ID'
-  - versionName: projects/$PROJECT_ID/secrets/quicksend-frontend-firebase-storage-bucket/versions/latest
-    env: 'VITE_FIREBASE_STORAGE_BUCKET'
-  - versionName: projects/$PROJECT_ID/secrets/quicksend-frontend-firebase-messaging-sender-id/versions/latest
-    env: 'VITE_FIREBASE_MESSAGING_SENDER_ID'
-  - versionName: projects/$PROJECT_ID/secrets/quicksend-frontend-firebase-app-id/versions/latest
-    env: 'VITE_FIREBASE_APP_ID'
 
 options:
   logging: CLOUD_LOGGING_ONLY 
