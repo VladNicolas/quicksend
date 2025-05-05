@@ -13,32 +13,8 @@ RUN npm install
 # Copy the rest of the application code
 COPY . .
 
-# Define build arguments for Firebase config
-ARG VITE_FIREBASE_API_KEY
-ARG VITE_FIREBASE_AUTH_DOMAIN
-ARG VITE_FIREBASE_PROJECT_ID
-ARG VITE_FIREBASE_STORAGE_BUCKET
-ARG VITE_FIREBASE_MESSAGING_SENDER_ID
-ARG VITE_FIREBASE_APP_ID
-
-# Set build-time environment variables from ARGs for Vite
-ENV VITE_FIREBASE_API_KEY=${VITE_FIREBASE_API_KEY}
-ENV VITE_FIREBASE_AUTH_DOMAIN=${VITE_FIREBASE_AUTH_DOMAIN}
-ENV VITE_FIREBASE_PROJECT_ID=${VITE_FIREBASE_PROJECT_ID}
-ENV VITE_FIREBASE_STORAGE_BUCKET=${VITE_FIREBASE_STORAGE_BUCKET}
-ENV VITE_FIREBASE_MESSAGING_SENDER_ID=${VITE_FIREBASE_MESSAGING_SENDER_ID}
-ENV VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID}
-
-# --- TEMPORARY DEBUG: Print ENV vars before build --- 
-RUN echo "DEBUG: VITE_FIREBASE_API_KEY ends with ***$(echo -n $VITE_FIREBASE_API_KEY | tail -c 5)***" && \
-    echo "DEBUG: VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN" && \
-    echo "DEBUG: VITE_FIREBASE_PROJECT_ID=$VITE_FIREBASE_PROJECT_ID" && \
-    echo "DEBUG: VITE_FIREBASE_STORAGE_BUCKET=$VITE_FIREBASE_STORAGE_BUCKET" && \
-    echo "DEBUG: VITE_FIREBASE_MESSAGING_SENDER_ID=$VITE_FIREBASE_MESSAGING_SENDER_ID" && \
-    echo "DEBUG: VITE_FIREBASE_APP_ID starts with ***$(echo -n $VITE_FIREBASE_APP_ID | head -c 5)***"
-# --- END TEMPORARY DEBUG --- 
-
-# Build the application for production (will use the ENV variables)
+# Build the application for production
+# Vite will use VITE_* environment variables present in the build environment
 RUN npm run build
 
 # Stage 2: Serve the static files with Nginx
