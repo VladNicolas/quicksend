@@ -16,6 +16,12 @@ declare global {
  * If invalid or missing, sends a 401 or 403 response.
  */
 const authMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  // Skip auth for OPTIONS requests
+  if (req.method === 'OPTIONS') {
+    next();
+    return;
+  }
+
   const authorizationHeader = req.headers.authorization;
 
   if (!authorizationHeader || !authorizationHeader.startsWith('Bearer ')) {
