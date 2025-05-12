@@ -49,7 +49,8 @@ export function MyFilesPage() {
         setIsLoading(true);
         setError(null);
         const idToken = await currentUser.getIdToken();
-        const response = await axios.get<MyFilesResponse>('/api/my-files', {
+        const backendBaseUrl = "https://quicksend-backend-service-627959729856.us-central1.run.app"; // Use backend URL
+        const response = await axios.get<MyFilesResponse>(`${backendBaseUrl}/api/my-files`, {
           headers: { Authorization: `Bearer ${idToken}` },
         });
 
@@ -84,7 +85,8 @@ export function MyFilesPage() {
 
     try {
       const idToken = await currentUser.getIdToken();
-      await axios.delete(`/api/files/${fileId}`, {
+      const backendBaseUrl = "https://quicksend-backend-service-627959729856.us-central1.run.app"; // Use backend URL
+      await axios.delete(`${backendBaseUrl}/api/files/${fileId}`, {
         headers: { Authorization: `Bearer ${idToken}` },
       });
 
