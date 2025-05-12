@@ -46,9 +46,9 @@ export function ShareDialog({
   // Effect to construct the share link when shareToken changes
   useEffect(() => {
     if (shareToken) {
-      // Construct the full URL based on the current origin
-      const baseUrl = window.location.origin
-      setShareLink(`${baseUrl}/api/download/${shareToken}`)
+      // Construct the full URL using the backend service URL
+      const backendBaseUrl = "https://quicksend-backend-service-627959729856.us-central1.run.app"; // Use backend URL
+      setShareLink(`${backendBaseUrl}/api/download/${shareToken}`)
     } else {
       setShareLink("") // Reset if no token
     }
