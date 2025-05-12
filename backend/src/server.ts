@@ -24,7 +24,14 @@ const app = express();
 const PORT = env.port;
 
 // Setup Middleware
-app.use(cors()); // Enable Cross-Origin Resource Sharing
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://quicksend-frontend-service-*.run.app', 'https://quicksend-frontend-service.run.app'] // Production domains
+    : 'http://localhost:5173', // Development domain
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 app.use(express.json()); // Parse JSON request bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded request bodies
 
