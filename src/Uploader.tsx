@@ -5,9 +5,10 @@
  * Displays upload progress and opens share dialog upon completion
  */
 import { useState, useEffect, DragEvent } from "react"
-import axios, { AxiosProgressEvent } from "axios"
-import { getAuth, onAuthStateChanged, User } from "firebase/auth"; // Import Firebase auth functions
-import firebaseApp from "@/lib/firebase"; // Corrected import path and use default import
+import { AxiosProgressEvent, AxiosError } from "axios"
+import { getAuth, onAuthStateChanged, User } from "firebase/auth"
+import firebaseApp from "@/lib/firebase"
+import api from "./lib/api" // Changed from @/lib/api to relative path
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -110,18 +111,16 @@ export function Uploader() {
   };
 
   /**
-   * Handles the actual file upload process using Axios
+   * Handles the actual file upload process using our API client
    */
   const handleUpload = async (selectedFiles: FileList) => {
     if (!selectedFiles || selectedFiles.length === 0) return
     if (!currentUser) {
-      setErrorMessage("Authentication error: No user logged in.");
-      setUploadState("error");
-      return; // Should not happen if checked in handleFileSelect, but good practice
+      setErrorMessage("Authentication error: No user logged in.")
+      setUploadState("error")
+      return
     }
 
-    // For simplicity, we'll upload the first file only.
-    // TODO: Implement multi-file upload logic if needed.
     const fileToUpload = selectedFiles[0]
 
     // Reset state before starting upload
@@ -134,13 +133,9 @@ export function Uploader() {
     formData.append("file", fileToUpload)
 
     try {
-      // Get the ID token
-      const idToken = await currentUser.getIdToken();
-
-      const response = await axios.post<UploadResponse>("/api/upload", formData, {
+      const response = await api.post<UploadResponse>("/api/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
-          "Authorization": `Bearer ${idToken}` // Add Authorization header
         },
         onUploadProgress: (progressEvent: AxiosProgressEvent) => {
           const percentCompleted = Math.round(
@@ -155,14 +150,13 @@ export function Uploader() {
         setUploadState("complete")
         setShowShareDialog(true)
       } else {
-        // Handle unexpected success response
         throw new Error(response.data.message || "Upload failed with unexpected status.")
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Upload error:", error)
       let message = "An unknown error occurred during upload."
-      if (axios.isAxiosError(error)) {
-        message = error.response?.data?.error || error.message
+      if (error instanceof AxiosError && error.response?.data?.error) {
+        message = error.response.data.error
       } else if (error instanceof Error) {
         message = error.message
       }
