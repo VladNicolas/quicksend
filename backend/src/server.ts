@@ -25,12 +25,8 @@ const PORT = env.port;
 
 // Setup Middleware
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        'https://quicksend-frontend-service-627959729856.us-central1.run.app',
-        'https://quicksend-frontend-service-*.run.app',
-        'https://quicksend-frontend-service.run.app'
-      ] // Production domains
+  origin: process.env.NODE_ENV === 'production'
+    ? 'https://quicksend-frontend-service-627959729856.us-central1.run.app' // Allow only the deployed frontend URL in prod
     : 'http://localhost:5173', // Development domain
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],

@@ -74,7 +74,8 @@ steps:
         '--region', '${_CLOUDRUN_REGION}',
         '--platform', 'managed',
         '--allow-unauthenticated', # Allow public access to the backend service
-        '--service-account', '${_BACKEND_SERVICE_ACCOUNT}' # Run as specific service account
+        '--service-account', '${_BACKEND_SERVICE_ACCOUNT}', # Run as specific service account
+        '--set-env-vars=NODE_ENV=production' # Set Node environment to production
         # Env vars like GCP_BUCKET_NAME should be mounted via Cloud Run secret config, not set here.
         # Add other flags like --port=5000 if needed (Cloud Run defaults often work)
       ]
