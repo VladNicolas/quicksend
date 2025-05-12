@@ -129,6 +129,22 @@ export function Uploader() {
     setErrorMessage(null)
     setShareToken(null)
 
+    let idToken;
+    try {
+      idToken = await currentUser.getIdToken();
+    } catch (error) {
+      console.error("Error getting ID token:", error);
+      setErrorMessage("Authentication error: Could not retrieve user credentials.");
+      setUploadState("error");
+      return;
+    }
+
+    if (!idToken) {
+      setErrorMessage("Authentication error: Failed to obtain user credentials.");
+      setUploadState("error");
+      return;
+    }
+
     const formData = new FormData()
     formData.append("file", fileToUpload)
 
@@ -136,6 +152,7 @@ export function Uploader() {
       const response = await api.post<UploadResponse>("/api/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
+          "Authorization": `Bearer ${idToken}`,
         },
         onUploadProgress: (progressEvent: AxiosProgressEvent) => {
           const percentCompleted = Math.round(
