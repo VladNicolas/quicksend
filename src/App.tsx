@@ -41,7 +41,7 @@ function UploaderPageContent() {
             Share your files quickly and easily
           </h1>
           <p className="text-lg text-muted-foreground">
-            No account required. Files are available for 7 days and 100 downloads.
+            Files are available for 7 days and 100 downloads.
           </p>
         </div>
         <Uploader />
