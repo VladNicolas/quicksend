@@ -81,7 +81,8 @@ const FilePreview = ({ file }: { file: FileData }) => {
 export function FileCard({ file, onDelete }: FileCardProps) {
 
   const handleCopyLink = () => {
-    const link = `${window.location.origin}/api/download/${file.shareToken}`;
+    const backendBaseUrl = import.meta.env.VITE_BACKEND_PUBLIC_URL || 'https://quicksend-backend-service-627959729856.us-central1.run.app'; // Fallback
+    const link = `${backendBaseUrl}/api/download/${file.shareToken}`;
     navigator.clipboard.writeText(link).then(() => {
       // TODO: Show copy success feedback (e.g., toast notification)
       console.log("Link copied:", link);

@@ -1,9 +1,11 @@
 import axios from 'axios';
 
 const isDevelopment = import.meta.env.DEV;
+const productionBackendUrl = import.meta.env.VITE_BACKEND_PUBLIC_URL || 'https://quicksend-backend-service-627959729856.us-central1.run.app'; // Fallback just in case
+
 const baseURL = isDevelopment 
   ? 'http://localhost:5000' 
-  : 'https://quicksend-backend-service-627959729856.us-central1.run.app';
+  : productionBackendUrl;
 
 const api = axios.create({
   baseURL,

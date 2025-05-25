@@ -21,6 +21,8 @@ steps:
         'VITE_FIREBASE_MESSAGING_SENDER_ID=${_VITE_FIREBASE_MESSAGING_SENDER_ID}',
         '--build-arg',
         'VITE_FIREBASE_APP_ID=${_VITE_FIREBASE_APP_ID}',
+        '--build-arg',
+        'VITE_BACKEND_PUBLIC_URL=${_VITE_BACKEND_PUBLIC_URL}',
         '.'
       ]
     # No secretEnv needed here as we are using substitutions via --build-arg
@@ -92,6 +94,7 @@ substitutions:
   _FRONTEND_SERVICE_NAME: 'quicksend-frontend-service' # Choose your Cloud Run service name
   _BACKEND_SERVICE_NAME: 'quicksend-backend-service' # Choose your Cloud Run service name
   _BACKEND_SERVICE_ACCOUNT: 'quicksend-backend@fleet-parsec-425911-i7.iam.gserviceaccount.com' # IMPORTANT: Replace with your actual service account email
+  _VITE_BACKEND_PUBLIC_URL: 'https://quicksend-backend-service-627959729856.us-central1.run.app' # Added for backend URL
 
 options:
   logging: CLOUD_LOGGING_ONLY 
