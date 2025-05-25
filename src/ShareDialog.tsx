@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Link, Mail, Check, Copy } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
+// import { Textarea } from "@/components/ui/textarea"; // Import Textarea if needed for custom message later - REMOVED
+import api from './lib/api'
 
 /**
  * Props interface for the ShareDialog component
@@ -42,12 +44,15 @@ export function ShareDialog({
   const [shareLink, setShareLink] = useState("")
   // Ref to track if the dialog was previously open
   const wasOpenRef = useRef(false)
+  // New state for email sending
+  const [isSending, setIsSending] = useState(false)
+  const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null)
 
   // Effect to construct the share link when shareToken changes
   useEffect(() => {
     if (shareToken) {
       // Construct the full URL using the backend service URL
-      const backendBaseUrl = "https://quicksend-backend-service-627959729856.us-central1.run.app"; // Use backend URL
+      const backendBaseUrl = "https://quicksend-backend-service-627959729856.us-central1.run.app" // Use backend URL
       setShareLink(`${backendBaseUrl}/api/download/${shareToken}`)
     } else {
       setShareLink("") // Reset if no token
@@ -82,6 +87,7 @@ export function ShareDialog({
     } catch (err) {
       console.error("Failed to copy link: ", err)
       // Optionally show an error message to the user
+      // For example: setEmailStatus({ type: 'error', message: 'Failed to copy.' });
     }
   }
 
@@ -89,15 +95,41 @@ export function ShareDialog({
    * Handles email form submission
    * TODO: Replace mock with actual API call to backend for sending email
    */
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!shareLink) return
-    // Mock email sending
-    console.log(`Simulating email send to: ${email} with link: ${shareLink}`)
-    // In a real app, call backend API here:
-    // await axios.post('/api/share/email', { recipient: email, shareToken });
-    setEmail("")
-    onOpenChange(false) // Close dialog after submission
+    if (!shareLink || !email || !shareToken) {
+        setEmailStatus({ type: 'error', message: 'Cannot send email: share information is missing.' });
+        return;
+    }
+
+    setIsSending(true);
+    setEmailStatus(null);
+
+    try {
+      await api.post('/api/share/email', { 
+        recipientEmail: email, 
+        shareToken: shareToken // Send token, backend constructs full link
+      });
+
+      setEmailStatus({ type: 'success', message: 'Email sent successfully!' });
+      setEmail(""); // Clear email input on success
+      // Optional: Close dialog after a delay
+      // setTimeout(() => {
+      //   if (open) onOpenChange(false);
+      // }, 2000);
+
+    } catch (error: any) {
+      console.error("Email sending error:", error);
+      let message = "Failed to send email. Please try again.";
+      if (error.response && error.response.data && error.response.data.error) {
+        message = error.response.data.error;
+      } else if (error.message) {
+        message = error.message;
+      }
+      setEmailStatus({ type: 'error', message });
+    } finally {
+      setIsSending(false);
+    }
   }
 
   return (
@@ -165,9 +197,14 @@ export function ShareDialog({
                   required
                 />
               </div>
-              <Button type="submit" className="w-full">
-                Send Link
+              <Button type="submit" className="w-full" disabled={isSending || !email}>
+                {isSending ? "Sending..." : "Send Link"}
               </Button>
+              {emailStatus && (
+                <p className={`text-sm mt-2 ${emailStatus.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                  {emailStatus.message}
+                </p>
+              )}
             </form>
           </TabsContent>
         </Tabs>

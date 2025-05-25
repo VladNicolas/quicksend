@@ -7,6 +7,8 @@ import env from '../config/environments'; // Import env for limits
 import { firestore } from '../config/firebase'; // Need firestore directly for query
 import { COLLECTIONS } from '../utils/firestore';
 import { logger } from '../config/logger'; // Import logger
+import formData from 'form-data'; // mailgun.js dependency
+import Mailgun from 'mailgun.js';
 
 /**
  * Upload a file
@@ -406,6 +408,93 @@ export const deleteFile = async (req: Request, res: Response): Promise<void> => 
     }
 };
 
+/**
+ * Share a file via email using Mailgun
+ * @route POST /api/share/email
+ */
+export const shareViaEmail = async (req: Request, res: Response): Promise<void> => {
+  const { recipientEmail, shareToken } = req.body;
+
+  // Basic validation
+  if (!recipientEmail || !shareToken) {
+    res.status(400).json({ error: 'Missing recipientEmail or shareToken in request body' });
+    return;
+  }
+
+  // Validate email format (simple regex, consider a more robust library for production)
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(recipientEmail)) {
+    res.status(400).json({ error: 'Invalid recipient email format' });
+    return;
+  }
+
+  const mailgunApiKey = process.env.MAILGUN_API_KEY;
+  const mailgunDomain = process.env.MAILGUN_DOMAIN;
+  const mailgunFromEmail = process.env.MAILGUN_FROM_EMAIL;
+  const backendBaseUrl = process.env.BACKEND_BASE_URL;
+
+  if (!mailgunApiKey || !mailgunDomain || !mailgunFromEmail || !backendBaseUrl) {
+    logger.error('Mailgun or Backend URL configuration is missing in environment variables.');
+    res.status(500).json({ error: 'Email service configuration error.' });
+    return;
+  }
+
+  // Check if file exists and is valid before attempting to send email
+  try {
+    const fileResult = await fileOperations.getFileMetadataByToken(shareToken);
+    if (!fileResult || !fileResult.data) {
+      res.status(404).json({ error: 'File not found or invalid share token.' });
+      return;
+    }
+    const file = fileResult.data;
+    if (new Date() > file.expiryTimestamp.toDate()) {
+        res.status(410).json({ error: 'Cannot share, file has expired.' });
+        return;
+    }
+    if (file.downloadCount >= env.maxDownloads) {
+        res.status(410).json({ error: 'Cannot share, file download limit reached.' });
+        return;
+    }
+
+    const mailgun = new Mailgun(formData);
+    const mg = mailgun.client({ username: 'api', key: mailgunApiKey });
+
+    const downloadLink = `${backendBaseUrl}/api/download/${shareToken}`;
+    
+    const emailSubject = 'A file has been shared with you via QuickSend';
+    const emailTextBody = `Someone has shared a file with you. You can download it here: ${downloadLink}\n\nThis link will expire in 7 days or after ${env.maxDownloads} downloads.`;
+    // Optional: Add an HTML body for prettier emails
+    const emailHtmlBody = `
+      <p>Hello,</p>
+      <p>Someone has shared a file with you using QuickSend: <strong>${file.name}</strong> (Size: ${(file.size / 1024 / 1024).toFixed(2)} MB).</p>
+      <p>You can download it using the link below:</p>
+      <p><a href="${downloadLink}">${downloadLink}</a></p>
+      <p>This link will expire on ${file.expiryTimestamp.toDate().toLocaleDateString()} or after ${env.maxDownloads} downloads.</p>
+      <p>Thank you for using QuickSend!</p>
+    `;
+
+    const messageData = {
+      from: `QuickSend File Share <${mailgunFromEmail}>`,
+      to: recipientEmail,
+      subject: emailSubject,
+      text: emailTextBody,
+      html: emailHtmlBody
+    };
+
+    await mg.messages.create(mailgunDomain, messageData);
+    logger.info(`Email sent successfully to ${recipientEmail} for token ${shareToken}`);
+    res.status(200).json({ message: 'Email sent successfully.' });
+
+  } catch (error: any) {
+    logger.error('Error sending email via Mailgun:', error.message || error);
+    if (error.status && error.message) { // Mailgun specific error
+        res.status(error.status).json({ error: `Failed to send email: ${error.message}` });
+    } else {
+        res.status(500).json({ error: 'Failed to send email due to an internal error.' });
+    }
+  }
+};
+
 // Update the default export to include the new function
 export default {
   uploadFile,
@@ -413,4 +502,5 @@ export default {
   downloadFile,
   getMyFiles,
   deleteFile,
+  shareViaEmail,
 }; 

@@ -40,4 +40,7 @@ router.get('/download/:shareToken', fileController.downloadFile);
 // New route for deleting a file (protected)
 router.delete('/files/:fileId', authMiddleware, fileController.deleteFile);
 
+// New route for sharing a file via email (protected)
+router.post('/share/email', authMiddleware, fileController.shareViaEmail);
+
 export default router; 
