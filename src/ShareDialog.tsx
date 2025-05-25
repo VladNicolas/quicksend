@@ -17,6 +17,8 @@ import { Link, Mail, Check, Copy } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 // import { Textarea } from "@/components/ui/textarea"; // Import Textarea if needed for custom message later - REMOVED
 import api from './lib/api'
+import { getAuth } from "firebase/auth";
+import firebaseApp from "./lib/firebase"; // Assuming this is the correct path to your firebase app instance
 
 /**
  * Props interface for the ShareDialog component
@@ -97,7 +99,7 @@ export function ShareDialog({
    */
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!shareLink || !email || !shareToken) {
+    if (!shareLink || !email || !shareToken) { 
         setEmailStatus({ type: 'error', message: 'Cannot send email: share information is missing.' });
         return;
     }
@@ -106,9 +108,40 @@ export function ShareDialog({
     setEmailStatus(null);
 
     try {
+      const auth = getAuth(firebaseApp);
+      const user = auth.currentUser;
+
+      if (!user) {
+        setEmailStatus({ type: 'error', message: 'Authentication error: User not signed in.' });
+        setIsSending(false);
+        return;
+      }
+
+      let idToken;
+      try {
+        idToken = await user.getIdToken();
+      } catch (tokenError) {
+        console.error("Error getting ID token for share email:", tokenError);
+        setEmailStatus({ type: 'error', message: 'Authentication error: Could not get user credentials.' });
+        setIsSending(false);
+        return;
+      }
+
+      if (!idToken) { // Should be caught by the try/catch, but as an extra safeguard
+        setEmailStatus({ type: 'error', message: 'Authentication error: Failed to obtain user credentials.' });
+        setIsSending(false);
+        return;
+      }
+      
       await api.post('/api/share/email', { 
         recipientEmail: email, 
-        shareToken: shareToken // Send token, backend constructs full link
+        shareToken: shareToken 
+      }, {
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          // Content-Type is likely application/json by default for this api.post, so might not be needed to set explicitly
+          // If backend expects a different Content-Type for this specific endpoint, set it here.
+        }
       });
 
       setEmailStatus({ type: 'success', message: 'Email sent successfully!' });
