@@ -73,27 +73,12 @@ steps:
         '--image', '${_AR_REGION}-docker.pkg.dev/$PROJECT_ID/quicksend-backend/quicksend-backend:$COMMIT_SHA',
         '--region', '${_CLOUDRUN_REGION}',
         '--platform', 'managed',
-        '--service-account', '${_BACKEND_SERVICE_ACCOUNT}', # Run as specific service account
-        # Updated environment variables and secrets
+        '--service-account', '${_BACKEND_SERVICE_ACCOUNT}',
         '--update-secrets=MAILGUN_API_KEY=quicksend-mailgun-api-key:latest,MAILGUN_DOMAIN=quicksend-mailgun-domain:latest,MAILGUN_FROM_EMAIL=quicksend-mailgun-from-email:latest,GCP_BUCKET_NAME=quicksend-gcs-bucket-name:latest',
         '--set-env-vars=NODE_ENV=production,BACKEND_BASE_URL=https://quicksend-backend-service-627959729856.us-central1.run.app'
-        # Note: If GCP_BUCKET_NAME was previously set manually or via another mechanism, ensure this combines correctly.
-        # If it's NOT a secret and just a plain env var, add it to --set-env-vars:
-        # '--set-env-vars=NODE_ENV=production,BACKEND_BASE_URL=https://quicksend-backend-service-627959729856.us-central1.run.app,GCP_BUCKET_NAME=your-bucket-name-here'
       ]
     id: 'Deploy Backend'
     waitFor: ['Push Backend']
-    availableSecrets:
-      secretManager:
-      - versionName: projects/$PROJECT_ID/secrets/quicksend-mailgun-api-key/versions/latest
-        env: 'MAILGUN_API_KEY_UNUSED' # Env var name here is just a placeholder for Cloud Build to access it, not used by Run
-      - versionName: projects/$PROJECT_ID/secrets/quicksend-mailgun-domain/versions/latest
-        env: 'MAILGUN_DOMAIN_UNUSED'
-      - versionName: projects/$PROJECT_ID/secrets/quicksend-mailgun-from-email/versions/latest
-        env: 'MAILGUN_FROM_EMAIL_UNUSED'
-      # If GCP_BUCKET_NAME is from a secret 'quicksend-gcs-bucket-name', add it here too:
-      - versionName: projects/$PROJECT_ID/secrets/quicksend-gcs-bucket-name/versions/latest
-        env: 'GCP_BUCKET_NAME_UNUSED'
 
 # Define images to push (results of build steps)
 images:
@@ -107,6 +92,18 @@ substitutions:
   _FRONTEND_SERVICE_NAME: 'quicksend-frontend-service' # Choose your Cloud Run service name
   _BACKEND_SERVICE_NAME: 'quicksend-backend-service' # Choose your Cloud Run service name
   _BACKEND_SERVICE_ACCOUNT: 'quicksend-backend@fleet-parsec-425911-i7.iam.gserviceaccount.com' # IMPORTANT: Replace with your actual service account email
+
+# availableSecrets should be at this top level
+availableSecrets:
+  secretManager:
+  - versionName: projects/$PROJECT_ID/secrets/quicksend-mailgun-api-key/versions/latest
+    env: 'MAILGUN_API_KEY' # This env var is for Cloud Build steps to use if they need it directly
+  - versionName: projects/$PROJECT_ID/secrets/quicksend-mailgun-domain/versions/latest
+    env: 'MAILGUN_DOMAIN'
+  - versionName: projects/$PROJECT_ID/secrets/quicksend-mailgun-from-email/versions/latest
+    env: 'MAILGUN_FROM_EMAIL'
+  - versionName: projects/$PROJECT_ID/secrets/quicksend-gcs-bucket-name/versions/latest
+    env: 'GCP_BUCKET_NAME_SECRET' # Renamed to avoid conflict if GCP_BUCKET_NAME is also set via --set-env-vars for some reason
 
 options:
   logging: CLOUD_LOGGING_ONLY 
