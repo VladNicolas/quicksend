@@ -93,18 +93,6 @@ substitutions:
   _BACKEND_SERVICE_NAME: 'quicksend-backend-service' # Choose your Cloud Run service name
   _BACKEND_SERVICE_ACCOUNT: 'quicksend-backend@fleet-parsec-425911-i7.iam.gserviceaccount.com' # IMPORTANT: Replace with your actual service account email
 
-# availableSecrets should be at this top level
-availableSecrets:
-  secretManager:
-  - versionName: projects/$PROJECT_ID/secrets/quicksend-mailgun-api-key/versions/latest
-    env: 'MAILGUN_API_KEY' # This env var is for Cloud Build steps to use if they need it directly
-  - versionName: projects/$PROJECT_ID/secrets/quicksend-mailgun-domain/versions/latest
-    env: 'MAILGUN_DOMAIN'
-  - versionName: projects/$PROJECT_ID/secrets/quicksend-mailgun-from-email/versions/latest
-    env: 'MAILGUN_FROM_EMAIL'
-  - versionName: projects/$PROJECT_ID/secrets/quicksend-gcs-bucket-name/versions/latest
-    env: 'GCP_BUCKET_NAME_SECRET' # Renamed to avoid conflict if GCP_BUCKET_NAME is also set via --set-env-vars for some reason
-
 options:
   logging: CLOUD_LOGGING_ONLY 
 
