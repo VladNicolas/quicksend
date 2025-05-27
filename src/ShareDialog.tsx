@@ -93,10 +93,6 @@ export function ShareDialog({
     }
   }
 
-  /**
-   * Handles email form submission
-   * TODO: Replace mock with actual API call to backend for sending email
-   */
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!shareLink || !email || !shareToken) { 
@@ -139,17 +135,11 @@ export function ShareDialog({
       }, {
         headers: {
           'Authorization': `Bearer ${idToken}`,
-          // Content-Type is likely application/json by default for this api.post, so might not be needed to set explicitly
-          // If backend expects a different Content-Type for this specific endpoint, set it here.
         }
       });
 
       setEmailStatus({ type: 'success', message: 'Email sent successfully!' });
       setEmail(""); // Clear email input on success
-      // Optional: Close dialog after a delay
-      // setTimeout(() => {
-      //   if (open) onOpenChange(false);
-      // }, 2000);
 
     } catch (error: any) {
       console.error("Email sending error:", error);
